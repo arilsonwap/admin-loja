@@ -16,6 +16,7 @@ import { createProduto, uploadImagem } from '@/lib/produtos';
 import { getCategorias } from '@/lib/categorias';
 import { Categoria } from '@/types';
 import { IoSparkles, IoCheckmark, IoClose } from 'react-icons/io5';
+import { useToast } from '@/components/Toast';
 
 // Configurações de validação de imagens
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -42,13 +43,14 @@ type ProdutoFormData = z.infer<typeof produtoSchema>;
 
 export default function NovoProdutoPage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [images, setImages] = useState<ImageFile[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiDescription, setAiDescription] = useState('');
   const [showAiPreview, setShowAiPreview] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const prevEmPromocaoRef = useRef<boolean>(false);
 
   const {
@@ -83,13 +85,33 @@ export default function NovoProdutoPage() {
     prevEmPromocaoRef.current = emPromocao;
   }, [emPromocao, preco, precoOriginal, setValue]);
 
+  // Detectar mudanças no formulário
+  useEffect(() => {
+    if (nome || categoria || preco || precoOriginal || images.length > 0) {
+      setHasUnsavedChanges(true);
+    }
+  }, [nome, categoria, preco, precoOriginal, images.length]);
+
+  // Confirmação de saída
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges && !loading) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges, loading]);
+
   const loadCategorias = async () => {
     try {
       const data = await getCategorias();
       setCategorias(data);
     } catch (error) {
       console.error('Erro ao carregar categorias:', error);
-      setErrorMessage('Não foi possível carregar as categorias. Tente recarregar a página.');
+      showToast('Não foi possível carregar as categorias. Tente recarregar a página.', 'error');
     }
   };
 
@@ -126,8 +148,7 @@ export default function NovoProdutoPage() {
     const { valid, errors } = validateFiles(files);
 
     if (errors.length > 0) {
-      setErrorMessage(errors.join('\n'));
-      setTimeout(() => setErrorMessage(''), 5000);
+      showToast(errors.join('\n'), 'error');
     }
 
     if (valid.length === 0) return;
@@ -150,7 +171,7 @@ export default function NovoProdutoPage() {
       };
       reader.readAsDataURL(file);
     });
-  }, [validateFiles]);
+  }, [validateFiles, showToast]);
 
   const handleRemoveImage = useCallback((index: number) => {
     setImages((prev) => {
@@ -164,14 +185,12 @@ export default function NovoProdutoPage() {
 
   const handleGenerateDescription = async () => {
     if (!nome || nome.length < 3) {
-      setErrorMessage('Digite o nome do produto primeiro (mínimo 3 caracteres)');
-      setTimeout(() => setErrorMessage(''), 3000);
+      showToast('Digite o nome do produto primeiro (mínimo 3 caracteres)', 'warning');
       return;
     }
 
     setAiLoading(true);
     setShowAiPreview(false);
-    setErrorMessage('');
 
     try {
       const response = await fetch('/api/generate-description', {
@@ -199,8 +218,7 @@ export default function NovoProdutoPage() {
       }
     } catch (error) {
       console.error('Erro ao gerar descrição:', error);
-      setErrorMessage('Não foi possível gerar a descrição. Tente novamente.');
-      setTimeout(() => setErrorMessage(''), 5000);
+      showToast('Não foi possível gerar a descrição. Tente novamente.', 'error');
     } finally {
       setAiLoading(false);
     }
@@ -219,13 +237,11 @@ export default function NovoProdutoPage() {
 
   const onSubmit = async (data: ProdutoFormData) => {
     if (images.length === 0) {
-      setErrorMessage('Adicione pelo menos uma imagem do produto.');
-      setTimeout(() => setErrorMessage(''), 3000);
+      showToast('Adicione pelo menos uma imagem do produto.', 'warning');
       return;
     }
 
     setLoading(true);
-    setErrorMessage('');
 
     try {
       // Upload de imagens com controle de erros individual
@@ -252,8 +268,9 @@ export default function NovoProdutoPage() {
       }
 
       if (uploadErrors.length > 0) {
-        setErrorMessage(
-          `Algumas imagens falharam: ${uploadErrors.join(', ')}. Continuando com ${imagemUrls.length} imagem(ns).`
+        showToast(
+          `Algumas imagens falharam: ${uploadErrors.join(', ')}. Continuando com ${imagemUrls.length} imagem(ns).`,
+          'warning'
         );
       }
 
@@ -264,12 +281,14 @@ export default function NovoProdutoPage() {
         createdAt: new Date(),
       });
 
+      setHasUnsavedChanges(false);
+      showToast('Produto criado com sucesso!', 'success');
       router.push('/produtos');
     } catch (error: any) {
       console.error('Erro ao criar produto:', error);
       const errorMsg =
         error.message || 'Erro ao criar produto. Verifique sua conexão e tente novamente.';
-      setErrorMessage(errorMsg);
+      showToast(errorMsg, 'error');
     } finally {
       setLoading(false);
     }
@@ -286,12 +305,6 @@ export default function NovoProdutoPage() {
           <h1 className="text-2xl font-bold text-gray-800 mb-6">
             Adicionar Novo Produto
           </h1>
-
-          {errorMessage && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-800 whitespace-pre-line">{errorMessage}</p>
-            </div>
-          )}
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <div className="bg-white rounded-lg shadow p-6 space-y-4">

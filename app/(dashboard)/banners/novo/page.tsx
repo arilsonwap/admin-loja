@@ -12,6 +12,7 @@ import Button from '@/components/Button';
 import FileUploader from '@/components/FileUploader';
 import ImagePreview from '@/components/ImagePreview';
 import { createBanner, uploadBannerImagem } from '@/lib/banners';
+import { useToast } from '@/components/Toast';
 
 const bannerSchema = z.object({
   ordem: z.number().min(0, 'Ordem deve ser um número positivo'),
@@ -22,6 +23,7 @@ type BannerFormData = z.infer<typeof bannerSchema>;
 
 export default function NovoBannerPage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [imagemFile, setImagemFile] = useState<File | null>(null);
   const [imagemPreview, setImagemPreview] = useState<string>('');
@@ -58,7 +60,7 @@ export default function NovoBannerPage() {
 
   const onSubmit = async (data: BannerFormData) => {
     if (!imagemFile) {
-      alert('Selecione uma imagem para o banner');
+      showToast('Selecione uma imagem para o banner', 'warning');
       return;
     }
 
@@ -82,10 +84,11 @@ export default function NovoBannerPage() {
         ativo: data.ativo,
       });
 
+      showToast('Banner criado com sucesso!', 'success');
       router.push('/banners');
     } catch (error) {
       console.error('Erro ao criar banner:', error);
-      alert('Erro ao criar banner');
+      showToast('Erro ao criar banner', 'error');
     } finally {
       setLoading(false);
     }

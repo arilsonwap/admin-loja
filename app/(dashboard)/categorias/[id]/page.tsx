@@ -10,6 +10,7 @@ import Input from '@/components/Input';
 import Select from '@/components/Select';
 import Button from '@/components/Button';
 import { getCategoria, updateCategoria } from '@/lib/categorias';
+import { useToast } from '@/components/Toast';
 
 const categoriaSchema = z.object({
   nome: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres'),
@@ -41,6 +42,7 @@ export default function EditarCategoriaPage() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
+  const { showToast } = useToast();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -63,7 +65,7 @@ export default function EditarCategoriaPage() {
       const categoria = await getCategoria(id);
 
       if (!categoria) {
-        alert('Categoria não encontrada');
+        showToast('Categoria não encontrada', 'error');
         router.push('/categorias');
         return;
       }
@@ -73,7 +75,7 @@ export default function EditarCategoriaPage() {
       setValue('ordem', categoria.ordem);
     } catch (error) {
       console.error('Erro ao carregar categoria:', error);
-      alert('Erro ao carregar categoria');
+      showToast('Erro ao carregar categoria', 'error');
     } finally {
       setLoading(false);
     }
@@ -84,10 +86,11 @@ export default function EditarCategoriaPage() {
 
     try {
       await updateCategoria(id, data);
+      showToast('Categoria atualizada com sucesso!', 'success');
       router.push('/categorias');
     } catch (error) {
       console.error('Erro ao atualizar categoria:', error);
-      alert('Erro ao atualizar categoria');
+      showToast('Erro ao atualizar categoria', 'error');
     } finally {
       setSaving(false);
     }

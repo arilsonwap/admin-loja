@@ -10,6 +10,7 @@ import Input from '@/components/Input';
 import Select from '@/components/Select';
 import Button from '@/components/Button';
 import { createCategoria } from '@/lib/categorias';
+import { useToast } from '@/components/Toast';
 
 const categoriaSchema = z.object({
   nome: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres'),
@@ -39,6 +40,7 @@ const iconesDisponiveis = [
 
 export default function NovaCategoriaPage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
 
   const {
@@ -57,10 +59,11 @@ export default function NovaCategoriaPage() {
 
     try {
       await createCategoria(data);
+      showToast('Categoria criada com sucesso!', 'success');
       router.push('/categorias');
     } catch (error) {
       console.error('Erro ao criar categoria:', error);
-      alert('Erro ao criar categoria');
+      showToast('Erro ao criar categoria', 'error');
     } finally {
       setLoading(false);
     }

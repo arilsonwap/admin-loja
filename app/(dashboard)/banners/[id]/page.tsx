@@ -12,6 +12,7 @@ import Button from '@/components/Button';
 import FileUploader from '@/components/FileUploader';
 import ImagePreview from '@/components/ImagePreview';
 import { getBanner, updateBanner, uploadBannerImagem } from '@/lib/banners';
+import { useToast } from '@/components/Toast';
 
 const bannerSchema = z.object({
   ordem: z.number().min(0, 'Ordem deve ser um número positivo'),
@@ -24,6 +25,7 @@ export default function EditarBannerPage() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
+  const { showToast } = useToast();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -49,7 +51,7 @@ export default function EditarBannerPage() {
       const banner = await getBanner(id);
 
       if (!banner) {
-        alert('Banner não encontrado');
+        showToast('Banner não encontrado', 'error');
         router.push('/banners');
         return;
       }
@@ -59,7 +61,7 @@ export default function EditarBannerPage() {
       setValue('ativo', banner.ativo);
     } catch (error) {
       console.error('Erro ao carregar banner:', error);
-      alert('Erro ao carregar banner');
+      showToast('Erro ao carregar banner', 'error');
     } finally {
       setLoading(false);
     }
@@ -101,10 +103,11 @@ export default function EditarBannerPage() {
         ativo: data.ativo,
       });
 
+      showToast('Banner atualizado com sucesso!', 'success');
       router.push('/banners');
     } catch (error) {
       console.error('Erro ao atualizar banner:', error);
-      alert('Erro ao atualizar banner');
+      showToast('Erro ao atualizar banner', 'error');
     } finally {
       setSaving(false);
     }

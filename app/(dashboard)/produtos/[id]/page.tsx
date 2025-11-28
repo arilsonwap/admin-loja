@@ -15,6 +15,7 @@ import ImagePreview from '@/components/ImagePreview';
 import { getProduto, updateProduto, uploadImagem } from '@/lib/produtos';
 import { getCategorias } from '@/lib/categorias';
 import { Categoria } from '@/types';
+import { useToast } from '@/components/Toast';
 
 const produtoSchema = z.object({
   nome: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres'),
@@ -31,6 +32,7 @@ export default function EditarProdutoPage() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
+  const { showToast } = useToast();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -38,6 +40,7 @@ export default function EditarProdutoPage() {
   const [imagemUrls, setImagemUrls] = useState<string[]>([]);
   const [novasImagemFiles, setNovasImagemFiles] = useState<File[]>([]);
   const [novasImagemPreviews, setNovasImagemPreviews] = useState<string[]>([]);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const {
     register,
@@ -51,6 +54,8 @@ export default function EditarProdutoPage() {
 
   const emPromocao = watch('emPromocao');
   const preco = watch('preco');
+  const nome = watch('nome');
+  const categoria = watch('categoria');
 
   useEffect(() => {
     loadData();
@@ -64,6 +69,26 @@ export default function EditarProdutoPage() {
     }
   }, [emPromocao]);
 
+  // Detectar mudanças no formulário
+  useEffect(() => {
+    if (!loading && (nome || categoria || preco || novasImagemFiles.length > 0)) {
+      setHasUnsavedChanges(true);
+    }
+  }, [nome, categoria, preco, novasImagemFiles.length, loading]);
+
+  // Confirmação de saída
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges && !saving) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges, saving]);
+
   const loadData = async () => {
     try {
       const [produto, categoriasData] = await Promise.all([
@@ -72,7 +97,7 @@ export default function EditarProdutoPage() {
       ]);
 
       if (!produto) {
-        alert('Produto não encontrado');
+        showToast('Produto não encontrado', 'error');
         router.push('/produtos');
         return;
       }
@@ -89,7 +114,7 @@ export default function EditarProdutoPage() {
       setValue('emPromocao', produto.emPromocao);
     } catch (error) {
       console.error('Erro ao carregar produto:', error);
-      alert('Erro ao carregar produto');
+      showToast('Erro ao carregar produto', 'error');
     } finally {
       setLoading(false);
     }
@@ -133,7 +158,7 @@ export default function EditarProdutoPage() {
       const todasImagens = [...imagemUrls, ...novasImagemUrls];
 
       if (todasImagens.length === 0) {
-        alert('O produto deve ter pelo menos uma imagem');
+        showToast('O produto deve ter pelo menos uma imagem', 'warning');
         setSaving(false);
         return;
       }
@@ -144,10 +169,12 @@ export default function EditarProdutoPage() {
         imagens: todasImagens,
       });
 
+      setHasUnsavedChanges(false);
+      showToast('Produto atualizado com sucesso!', 'success');
       router.push('/produtos');
     } catch (error) {
       console.error('Erro ao atualizar produto:', error);
-      alert('Erro ao atualizar produto');
+      showToast('Erro ao atualizar produto', 'error');
     } finally {
       setSaving(false);
     }
