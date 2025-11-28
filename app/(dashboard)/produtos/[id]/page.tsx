@@ -54,16 +54,10 @@ export default function EditarProdutoPage() {
   });
 
   // Usar useWatch para observar múltiplos campos de forma eficiente
-  const { emPromocao, preco, precoOriginal, nome, categoria } = useWatch({
+  const [emPromocao, preco, precoOriginal, nome, categoria] = useWatch({
     control,
     name: ['emPromocao', 'preco', 'precoOriginal', 'nome', 'categoria'],
-  }) as {
-    emPromocao: boolean;
-    preco: number;
-    precoOriginal?: number;
-    nome: string;
-    categoria: string;
-  };
+  }) as [boolean, number, number | undefined, string, string];
 
   // Hook customizado para rastrear valor anterior
   const prevEmPromocao = usePrevious(emPromocao);
