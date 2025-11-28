@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -17,6 +17,18 @@ import { getCategorias } from '@/lib/categorias';
 import { Categoria } from '@/types';
 import { IoSparkles, IoCheckmark, IoClose } from 'react-icons/io5';
 
+// Configurações de validação de imagens
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+const MAX_IMAGES = 10;
+
+// Interface para gerenciar estado de imagens
+interface ImageFile {
+  file: File;
+  preview: string;
+  id: string;
+}
+
 const produtoSchema = z.object({
   nome: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres'),
   preco: z.number().min(0.01, 'Preço deve ser maior que zero'),
@@ -32,11 +44,12 @@ export default function NovoProdutoPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
-  const [imagemFiles, setImagemFiles] = useState<File[]>([]);
-  const [imagemPreviews, setImagemPreviews] = useState<string[]>([]);
+  const [images, setImages] = useState<ImageFile[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiDescription, setAiDescription] = useState('');
   const [showAiPreview, setShowAiPreview] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const prevEmPromocaoRef = useRef<boolean>(false);
 
   const {
     register,
@@ -55,18 +68,20 @@ export default function NovoProdutoPage() {
   const nome = watch('nome');
   const categoria = watch('categoria');
   const preco = watch('preco');
+  const precoOriginal = watch('precoOriginal');
 
   useEffect(() => {
     loadCategorias();
   }, []);
 
-  // Quando ativar promoção, transferir preço atual para preço original
+  // Otimizado: usar ref para evitar execução desnecessária
   useEffect(() => {
-    if (emPromocao && preco && !watch('precoOriginal')) {
+    if (emPromocao && !prevEmPromocaoRef.current && preco && !precoOriginal) {
       setValue('precoOriginal', preco);
       setValue('preco', 0);
     }
-  }, [emPromocao]);
+    prevEmPromocaoRef.current = emPromocao;
+  }, [emPromocao, preco, precoOriginal, setValue]);
 
   const loadCategorias = async () => {
     try {
@@ -74,17 +89,89 @@ export default function NovoProdutoPage() {
       setCategorias(data);
     } catch (error) {
       console.error('Erro ao carregar categorias:', error);
+      setErrorMessage('Não foi possível carregar as categorias. Tente recarregar a página.');
     }
   };
 
+  // Validação de arquivos
+  const validateFiles = useCallback((files: File[]): { valid: File[]; errors: string[] } => {
+    const validFiles: File[] = [];
+    const errors: string[] = [];
+
+    if (images.length + files.length > MAX_IMAGES) {
+      errors.push(`Você pode adicionar no máximo ${MAX_IMAGES} imagens.`);
+      return { valid: validFiles, errors };
+    }
+
+    files.forEach((file) => {
+      // Validar tipo
+      if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+        errors.push(`${file.name}: Tipo não permitido. Use JPG, PNG ou WEBP.`);
+        return;
+      }
+
+      // Validar tamanho
+      if (file.size > MAX_FILE_SIZE) {
+        errors.push(`${file.name}: Arquivo muito grande. Máximo 5MB.`);
+        return;
+      }
+
+      validFiles.push(file);
+    });
+
+    return { valid: validFiles, errors };
+  }, [images.length]);
+
+  const handleFilesSelected = useCallback((files: File[]) => {
+    const { valid, errors } = validateFiles(files);
+
+    if (errors.length > 0) {
+      setErrorMessage(errors.join('\n'));
+      setTimeout(() => setErrorMessage(''), 5000);
+    }
+
+    if (valid.length === 0) return;
+
+    const newImages: ImageFile[] = [];
+
+    valid.forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const imageFile: ImageFile = {
+          file,
+          preview: reader.result as string,
+          id: `${Date.now()}-${Math.random()}`,
+        };
+        newImages.push(imageFile);
+
+        if (newImages.length === valid.length) {
+          setImages((prev) => [...prev, ...newImages]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  }, [validateFiles]);
+
+  const handleRemoveImage = useCallback((index: number) => {
+    setImages((prev) => {
+      const newImages = [...prev];
+      // Limpar URL do preview para evitar memory leak
+      URL.revokeObjectURL(newImages[index].preview);
+      newImages.splice(index, 1);
+      return newImages;
+    });
+  }, []);
+
   const handleGenerateDescription = async () => {
     if (!nome || nome.length < 3) {
-      alert('Digite o nome do produto primeiro');
+      setErrorMessage('Digite o nome do produto primeiro (mínimo 3 caracteres)');
+      setTimeout(() => setErrorMessage(''), 3000);
       return;
     }
 
     setAiLoading(true);
     setShowAiPreview(false);
+    setErrorMessage('');
 
     try {
       const response = await fetch('/api/generate-description', {
@@ -98,66 +185,76 @@ export default function NovoProdutoPage() {
         }),
       });
 
+      if (!response.ok) {
+        throw new Error(`Erro HTTP: ${response.status}`);
+      }
+
       const data = await response.json();
 
       if (data.description) {
         setAiDescription(data.description);
         setShowAiPreview(true);
       } else {
-        alert('Erro ao gerar descrição');
+        throw new Error('Descrição não recebida');
       }
     } catch (error) {
       console.error('Erro ao gerar descrição:', error);
-      alert('Erro ao gerar descrição com IA');
+      setErrorMessage('Não foi possível gerar a descrição. Tente novamente.');
+      setTimeout(() => setErrorMessage(''), 5000);
     } finally {
       setAiLoading(false);
     }
   };
 
-  const handleAcceptAiDescription = () => {
+  const handleAcceptAiDescription = useCallback(() => {
     setValue('descricao', aiDescription);
     setShowAiPreview(false);
     setAiDescription('');
-  };
+  }, [aiDescription, setValue]);
 
-  const handleRejectAiDescription = () => {
+  const handleRejectAiDescription = useCallback(() => {
     setShowAiPreview(false);
     setAiDescription('');
-  };
-
-  const handleFilesSelected = (files: File[]) => {
-    setImagemFiles((prev) => [...prev, ...files]);
-
-    // Criar previews
-    files.forEach((file) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagemPreviews((prev) => [...prev, reader.result as string]);
-      };
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const handleRemoveImage = (index: number) => {
-    setImagemFiles((prev) => prev.filter((_, i) => i !== index));
-    setImagemPreviews((prev) => prev.filter((_, i) => i !== index));
-  };
+  }, []);
 
   const onSubmit = async (data: ProdutoFormData) => {
-    if (imagemFiles.length === 0) {
-      alert('Adicione pelo menos uma imagem');
+    if (images.length === 0) {
+      setErrorMessage('Adicione pelo menos uma imagem do produto.');
+      setTimeout(() => setErrorMessage(''), 3000);
       return;
     }
 
     setLoading(true);
+    setErrorMessage('');
 
     try {
-      // Upload de imagens
+      // Upload de imagens com controle de erros individual
       const imagemUrls: string[] = [];
-      for (const file of imagemFiles) {
-        const timestamp = Date.now();
-        const url = await uploadImagem(file, `produtos/${timestamp}_${file.name}`);
-        imagemUrls.push(url);
+      const uploadErrors: string[] = [];
+
+      for (let i = 0; i < images.length; i++) {
+        try {
+          const timestamp = Date.now();
+          const sanitizedName = images[i].file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+          const url = await uploadImagem(
+            images[i].file,
+            `produtos/${timestamp}_${sanitizedName}`
+          );
+          imagemUrls.push(url);
+        } catch (error) {
+          console.error(`Erro ao fazer upload da imagem ${i + 1}:`, error);
+          uploadErrors.push(`Imagem ${i + 1}: falha no upload`);
+        }
+      }
+
+      if (imagemUrls.length === 0) {
+        throw new Error('Nenhuma imagem foi enviada com sucesso. Tente novamente.');
+      }
+
+      if (uploadErrors.length > 0) {
+        setErrorMessage(
+          `Algumas imagens falharam: ${uploadErrors.join(', ')}. Continuando com ${imagemUrls.length} imagem(ns).`
+        );
       }
 
       // Criar produto
@@ -168,13 +265,18 @@ export default function NovoProdutoPage() {
       });
 
       router.push('/produtos');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao criar produto:', error);
-      alert('Erro ao criar produto');
+      const errorMsg =
+        error.message || 'Erro ao criar produto. Verifique sua conexão e tente novamente.';
+      setErrorMessage(errorMsg);
     } finally {
       setLoading(false);
     }
   };
+
+  // Memoizar previews de imagens
+  const imagePreviews = useMemo(() => images.map((img) => img.preview), [images]);
 
   return (
     <>
@@ -184,6 +286,12 @@ export default function NovoProdutoPage() {
           <h1 className="text-2xl font-bold text-gray-800 mb-6">
             Adicionar Novo Produto
           </h1>
+
+          {errorMessage && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-800 whitespace-pre-line">{errorMessage}</p>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <div className="bg-white rounded-lg shadow p-6 space-y-4">
@@ -330,7 +438,12 @@ export default function NovoProdutoPage() {
             </div>
 
             <div className="bg-white rounded-lg shadow p-6 space-y-4">
-              <h2 className="text-lg font-semibold text-gray-800">Imagens</h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-800">Imagens</h2>
+                <span className="text-xs text-gray-500">
+                  {images.length}/{MAX_IMAGES} imagens
+                </span>
+              </div>
 
               <FileUploader
                 label="Adicionar Imagens"
@@ -338,6 +451,15 @@ export default function NovoProdutoPage() {
                 multiple
                 onFilesSelected={handleFilesSelected}
               />
+
+              <div className="text-xs text-gray-600 bg-blue-50 p-3 rounded border border-blue-200">
+                <p className="font-medium mb-1">📋 Requisitos de imagem:</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>Formatos: JPG, PNG ou WEBP</li>
+                  <li>Tamanho máximo: 5MB por imagem</li>
+                  <li>Limite: {MAX_IMAGES} imagens por produto</li>
+                </ul>
+              </div>
 
               <ImagePreview
                 images={imagemPreviews}
