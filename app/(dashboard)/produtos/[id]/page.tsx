@@ -189,26 +189,62 @@ export default function EditarProdutoPage() {
                 {...register('categoria')}
               />
 
-              <div className="grid grid-cols-2 gap-4">
-                <Input
-                  label="Preço"
-                  type="number"
-                  step="0.01"
-                  placeholder="0.00"
-                  error={errors.preco?.message}
-                  required
-                  {...register('preco', { valueAsNumber: true })}
+              <div className="border-t pt-4">
+                <Toggle
+                  label="Produto em promoção"
+                  {...register('emPromocao')}
                 />
-
-                <Input
-                  label="Preço Original (opcional)"
-                  type="number"
-                  step="0.01"
-                  placeholder="0.00"
-                  error={errors.precoOriginal?.message}
-                  {...register('precoOriginal', { valueAsNumber: true })}
-                />
+                <p className="text-xs text-gray-500 mt-2">
+                  {emPromocao
+                    ? '✅ Ative para criar uma oferta com preço promocional'
+                    : '💡 Ative para mostrar preço original riscado e preço promocional em destaque'}
+                </p>
               </div>
+
+              {emPromocao ? (
+                <div className="space-y-4 bg-green-50 p-4 rounded-lg border border-green-200">
+                  <p className="text-sm font-medium text-green-800">
+                    🏷️ Configurar Promoção
+                  </p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input
+                      label="Preço Original (De:)"
+                      type="number"
+                      step="0.01"
+                      placeholder="149.90"
+                      error={errors.precoOriginal?.message}
+                      {...register('precoOriginal', { valueAsNumber: true })}
+                    />
+                    <Input
+                      label="Preço Promocional (Por:)"
+                      type="number"
+                      step="0.01"
+                      placeholder="99.90"
+                      error={errors.preco?.message}
+                      required
+                      {...register('preco', { valueAsNumber: true })}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-600">
+                    💰 O cliente verá: <span className="line-through">De: R$ {watch('precoOriginal') || '0,00'}</span> → <span className="font-bold text-green-600">Por: R$ {watch('preco') || '0,00'}</span>
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <Input
+                    label="Preço do Produto"
+                    type="number"
+                    step="0.01"
+                    placeholder="99.90"
+                    error={errors.preco?.message}
+                    required
+                    {...register('preco', { valueAsNumber: true })}
+                  />
+                  <p className="text-xs text-gray-600 mt-2">
+                    💵 Este será o preço de venda do produto
+                  </p>
+                </div>
+              )}
 
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-1 block">
@@ -226,11 +262,6 @@ export default function EditarProdutoPage() {
                   <span className="text-sm text-red-500">{errors.descricao.message}</span>
                 )}
               </div>
-
-              <Toggle
-                label="Produto em promoção"
-                {...register('emPromocao')}
-              />
             </div>
 
             <div className="bg-white rounded-lg shadow p-6 space-y-4">
