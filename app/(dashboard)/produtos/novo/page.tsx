@@ -15,6 +15,7 @@ import ImagePreview from '@/components/ImagePreview';
 import { createProduto, uploadImagem } from '@/lib/produtos';
 import { getCategorias } from '@/lib/categorias';
 import { Categoria } from '@/types';
+import { IoSparkles, IoCheckmark, IoClose } from 'react-icons/io5';
 
 const produtoSchema = z.object({
   nome: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres'),
@@ -33,6 +34,9 @@ export default function NovoProdutoPage() {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [imagemFiles, setImagemFiles] = useState<File[]>([]);
   const [imagemPreviews, setImagemPreviews] = useState<string[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiDescription, setAiDescription] = useState('');
+  const [showAiPreview, setShowAiPreview] = useState(false);
 
   const {
     register,
@@ -48,6 +52,8 @@ export default function NovoProdutoPage() {
   });
 
   const emPromocao = watch('emPromocao');
+  const nome = watch('nome');
+  const categoria = watch('categoria');
 
   useEffect(() => {
     loadCategorias();
@@ -60,6 +66,54 @@ export default function NovoProdutoPage() {
     } catch (error) {
       console.error('Erro ao carregar categorias:', error);
     }
+  };
+
+  const handleGenerateDescription = async () => {
+    if (!nome || nome.length < 3) {
+      alert('Digite o nome do produto primeiro');
+      return;
+    }
+
+    setAiLoading(true);
+    setShowAiPreview(false);
+
+    try {
+      const response = await fetch('/api/generate-description', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          nome,
+          categoria: categoria || 'produto',
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.description) {
+        setAiDescription(data.description);
+        setShowAiPreview(true);
+      } else {
+        alert('Erro ao gerar descrição');
+      }
+    } catch (error) {
+      console.error('Erro ao gerar descrição:', error);
+      alert('Erro ao gerar descrição com IA');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleAcceptAiDescription = () => {
+    setValue('descricao', aiDescription);
+    setShowAiPreview(false);
+    setAiDescription('');
+  };
+
+  const handleRejectAiDescription = () => {
+    setShowAiPreview(false);
+    setAiDescription('');
   };
 
   const handleFilesSelected = (files: File[]) => {
@@ -169,9 +223,50 @@ export default function NovoProdutoPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">
-                  Descrição <span className="text-red-500">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-sm font-medium text-gray-700">
+                    Descrição <span className="text-red-500">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleGenerateDescription}
+                    disabled={aiLoading || !nome}
+                    className="flex items-center gap-2 px-3 py-1 text-sm bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-md hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  >
+                    <IoSparkles className={aiLoading ? 'animate-spin' : ''} />
+                    {aiLoading ? 'Gerando...' : 'Gerar com IA'}
+                  </button>
+                </div>
+
+                {showAiPreview && aiDescription && (
+                  <div className="mb-3 p-4 bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-200 rounded-lg">
+                    <div className="flex items-start justify-between mb-2">
+                      <span className="text-xs font-medium text-purple-700 flex items-center gap-1">
+                        <IoSparkles /> Sugestão da IA
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={handleAcceptAiDescription}
+                          className="p-1 text-green-600 hover:bg-green-100 rounded transition-colors"
+                          title="Usar esta descrição"
+                        >
+                          <IoCheckmark size={20} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleRejectAiDescription}
+                          className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors"
+                          title="Descartar"
+                        >
+                          <IoClose size={20} />
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-700">{aiDescription}</p>
+                  </div>
+                )}
+
                 <textarea
                   rows={4}
                   placeholder="Descrição detalhada do produto..."
@@ -183,6 +278,9 @@ export default function NovoProdutoPage() {
                 {errors.descricao && (
                   <span className="text-sm text-red-500">{errors.descricao.message}</span>
                 )}
+                <p className="text-xs text-gray-500 mt-1">
+                  💡 Dica: Preencha o nome e categoria, depois clique em "Gerar com IA" para criar uma descrição automática
+                </p>
               </div>
 
               <Toggle
