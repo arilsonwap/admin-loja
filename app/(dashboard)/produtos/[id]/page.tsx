@@ -267,7 +267,7 @@ export default function EditarProdutoPage() {
                     />
                   </div>
                   <p className="text-xs text-gray-600">
-                    💰 O cliente verá: <span className="line-through">De: R$ {watch('precoOriginal') || '0,00'}</span> → <span className="font-bold text-green-600">Por: R$ {watch('preco') || '0,00'}</span>
+                    💰 O cliente verá: <span className="line-through">De: R$ {precoOriginal || '0,00'}</span> → <span className="font-bold text-green-600">Por: R$ {preco || '0,00'}</span>
                   </p>
                 </div>
               ) : (
