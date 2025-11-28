@@ -462,7 +462,7 @@ export default function NovoProdutoPage() {
               </div>
 
               <ImagePreview
-                images={imagemPreviews}
+                images={imagePreviews}
                 onRemove={handleRemoveImage}
               />
             </div>
