@@ -33,6 +33,8 @@ const iconesDisponiveis = [
   { value: 'IoBag', label: 'Bolsa (IoBag)' },
   { value: 'IoGlasses', label: 'Óculos (IoGlasses)' },
   { value: 'IoFootball', label: 'Futebol (IoFootball)' },
+  { value: 'IoGift', label: 'Brinquedo (IoGift)' },
+  { value: 'IoRestaurant', label: 'Cozinha (IoRestaurant)' },
 ];
 
 export default function NovaCategoriaPage() {
