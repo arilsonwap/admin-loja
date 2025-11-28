@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Header from '@/components/Header';
@@ -17,6 +17,7 @@ import { getCategorias } from '@/lib/categorias';
 import { Categoria } from '@/types';
 import { IoSparkles, IoCheckmark, IoClose } from 'react-icons/io5';
 import { useToast } from '@/components/Toast';
+import { usePrevious } from '@/hooks/usePrevious';
 
 // Configurações de validação de imagens
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -51,14 +52,13 @@ export default function NovoProdutoPage() {
   const [aiDescription, setAiDescription] = useState('');
   const [showAiPreview, setShowAiPreview] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const prevEmPromocaoRef = useRef<boolean>(false);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
     setValue,
-    watch,
+    control,
   } = useForm<ProdutoFormData>({
     resolver: zodResolver(produtoSchema),
     defaultValues: {
@@ -66,24 +66,32 @@ export default function NovoProdutoPage() {
     },
   });
 
-  const emPromocao = watch('emPromocao');
-  const nome = watch('nome');
-  const categoria = watch('categoria');
-  const preco = watch('preco');
-  const precoOriginal = watch('precoOriginal');
+  // Usar useWatch para observar múltiplos campos de forma eficiente
+  const { emPromocao, nome, categoria, preco, precoOriginal } = useWatch({
+    control,
+    name: ['emPromocao', 'nome', 'categoria', 'preco', 'precoOriginal'],
+  }) as {
+    emPromocao: boolean;
+    nome: string;
+    categoria: string;
+    preco: number;
+    precoOriginal?: number;
+  };
+
+  // Hook customizado para rastrear valor anterior
+  const prevEmPromocao = usePrevious(emPromocao);
 
   useEffect(() => {
     loadCategorias();
   }, []);
 
-  // Otimizado: usar ref para evitar execução desnecessária
+  // Transferir preço para "Preço Original" quando ativar promoção
   useEffect(() => {
-    if (emPromocao && !prevEmPromocaoRef.current && preco && !precoOriginal) {
+    if (emPromocao && !prevEmPromocao && preco && !precoOriginal) {
       setValue('precoOriginal', preco);
       setValue('preco', 0);
     }
-    prevEmPromocaoRef.current = emPromocao;
-  }, [emPromocao, preco, precoOriginal, setValue]);
+  }, [emPromocao, prevEmPromocao, preco, precoOriginal, setValue]);
 
   // Detectar mudanças no formulário
   useEffect(() => {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Header from '@/components/Header';
@@ -16,6 +16,7 @@ import { getProduto, updateProduto, uploadImagem } from '@/lib/produtos';
 import { getCategorias } from '@/lib/categorias';
 import { Categoria } from '@/types';
 import { useToast } from '@/components/Toast';
+import { usePrevious } from '@/hooks/usePrevious';
 
 const produtoSchema = z.object({
   nome: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres'),
@@ -47,27 +48,37 @@ export default function EditarProdutoPage() {
     handleSubmit,
     formState: { errors },
     setValue,
-    watch,
+    control,
   } = useForm<ProdutoFormData>({
     resolver: zodResolver(produtoSchema),
   });
 
-  const emPromocao = watch('emPromocao');
-  const preco = watch('preco');
-  const nome = watch('nome');
-  const categoria = watch('categoria');
+  // Usar useWatch para observar múltiplos campos de forma eficiente
+  const { emPromocao, preco, precoOriginal, nome, categoria } = useWatch({
+    control,
+    name: ['emPromocao', 'preco', 'precoOriginal', 'nome', 'categoria'],
+  }) as {
+    emPromocao: boolean;
+    preco: number;
+    precoOriginal?: number;
+    nome: string;
+    categoria: string;
+  };
+
+  // Hook customizado para rastrear valor anterior
+  const prevEmPromocao = usePrevious(emPromocao);
 
   useEffect(() => {
     loadData();
   }, [id]);
 
-  // Quando ativar promoção, transferir preço atual para preço original
+  // Transferir preço para "Preço Original" quando ativar promoção
   useEffect(() => {
-    if (emPromocao && preco && !watch('precoOriginal')) {
+    if (emPromocao && !prevEmPromocao && preco && !precoOriginal) {
       setValue('precoOriginal', preco);
       setValue('preco', 0);
     }
-  }, [emPromocao]);
+  }, [emPromocao, prevEmPromocao, preco, precoOriginal, setValue]);
 
   // Detectar mudanças no formulário
   useEffect(() => {
