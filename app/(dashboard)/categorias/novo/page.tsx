@@ -20,6 +20,7 @@ const categoriaSchema = z.object({
 type CategoriaFormData = z.infer<typeof categoriaSchema>;
 
 const iconesDisponiveis = [
+  { value: 'IoHardwareChip', label: 'Eletrônico (IoHardwareChip)' },
   { value: 'IoShirt', label: 'Camiseta (IoShirt)' },
   { value: 'IoWatch', label: 'Relógio (IoWatch)' },
   { value: 'IoPhonePortrait', label: 'Celular (IoPhonePortrait)' },
