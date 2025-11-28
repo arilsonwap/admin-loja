@@ -50,10 +50,19 @@ export default function EditarProdutoPage() {
   });
 
   const emPromocao = watch('emPromocao');
+  const preco = watch('preco');
 
   useEffect(() => {
     loadData();
   }, [id]);
+
+  // Quando ativar promoção, transferir preço atual para preço original
+  useEffect(() => {
+    if (emPromocao && preco && !watch('precoOriginal')) {
+      setValue('precoOriginal', preco);
+      setValue('preco', 0);
+    }
+  }, [emPromocao]);
 
   const loadData = async () => {
     try {

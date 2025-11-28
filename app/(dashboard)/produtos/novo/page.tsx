@@ -54,10 +54,19 @@ export default function NovoProdutoPage() {
   const emPromocao = watch('emPromocao');
   const nome = watch('nome');
   const categoria = watch('categoria');
+  const preco = watch('preco');
 
   useEffect(() => {
     loadCategorias();
   }, []);
+
+  // Quando ativar promoção, transferir preço atual para preço original
+  useEffect(() => {
+    if (emPromocao && preco && !watch('precoOriginal')) {
+      setValue('precoOriginal', preco);
+      setValue('preco', 0);
+    }
+  }, [emPromocao]);
 
   const loadCategorias = async () => {
     try {
