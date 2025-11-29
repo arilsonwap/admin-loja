@@ -82,11 +82,18 @@ export default function NovoProdutoPage() {
     loadCategorias();
   }, []);
 
-  // Transferir preço para "Preço Original" quando ativar promoção
+  // Transferir preço para "Preço Original" quando ativar/desativar promoção
   useEffect(() => {
+    // Quando ATIVA a promoção: transfere preço atual para preço original
     if (emPromocao && !prevEmPromocao && preco && !precoOriginal) {
       setValue('precoOriginal', preco);
       setValue('preco', 0);
+    }
+
+    // Quando DESATIVA a promoção: volta preço original para preço normal
+    if (!emPromocao && prevEmPromocao && precoOriginal) {
+      setValue('preco', precoOriginal);
+      setValue('precoOriginal', undefined);
     }
   }, [emPromocao, prevEmPromocao, preco, precoOriginal, setValue]);
 
