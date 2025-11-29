@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, useId } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -45,6 +45,9 @@ type ProdutoFormData = z.infer<typeof produtoSchema>;
 export default function NovoProdutoPage() {
   const router = useRouter();
   const { showToast } = useToast();
+  const baseId = useId(); // IDs únicos para SSR
+  const abortControllerRef = useRef<AbortController | null>(null); // Cancelamento de requisições
+
   const [loading, setLoading] = useState(false);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [images, setImages] = useState<ImageFile[]>([]);
@@ -107,6 +110,15 @@ export default function NovoProdutoPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges, loading]);
 
+  // Cleanup: cancelar requisições pendentes ao desmontar
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
   const loadCategorias = async () => {
     try {
       const data = await getCategorias();
@@ -117,8 +129,9 @@ export default function NovoProdutoPage() {
     }
   };
 
-  // Validação de arquivos
-  const validateFiles = useCallback((files: File[]): { valid: File[]; errors: string[] } => {
+  // Validação de arquivos com tipagem explícita
+  type ValidateFilesResult = { valid: File[]; errors: string[] };
+  const validateFiles = useCallback((files: File[]): ValidateFilesResult => {
     const validFiles: File[] = [];
     const errors: string[] = [];
 
@@ -146,7 +159,9 @@ export default function NovoProdutoPage() {
     return { valid: validFiles, errors };
   }, [images.length]);
 
-  const handleFilesSelected = useCallback((files: File[]) => {
+  // Handler de seleção de arquivos com tipagem explícita
+  type FilesSelectedHandler = (files: File[]) => void;
+  const handleFilesSelected = useCallback<FilesSelectedHandler>((files) => {
     const { valid, errors } = validateFiles(files);
 
     if (errors.length > 0) {
@@ -157,13 +172,13 @@ export default function NovoProdutoPage() {
 
     const newImages: ImageFile[] = [];
 
-    valid.forEach((file) => {
+    valid.forEach((file, index) => {
       const reader = new FileReader();
       reader.onloadend = () => {
         const imageFile: ImageFile = {
           file,
           preview: reader.result as string,
-          id: `${Date.now()}-${Math.random()}`,
+          id: `${baseId}-${Date.now()}-${index}`, // SSR-safe unique ID
         };
         newImages.push(imageFile);
 
@@ -173,9 +188,11 @@ export default function NovoProdutoPage() {
       };
       reader.readAsDataURL(file);
     });
-  }, [validateFiles, showToast]);
+  }, [validateFiles, showToast, baseId]);
 
-  const handleRemoveImage = useCallback((index: number) => {
+  // Handler de remoção de imagem com tipagem explícita
+  type RemoveImageHandler = (index: number) => void;
+  const handleRemoveImage = useCallback<RemoveImageHandler>((index) => {
     setImages((prev) => {
       const newImages = [...prev];
       // Limpar URL do preview para evitar memory leak
@@ -185,11 +202,20 @@ export default function NovoProdutoPage() {
     });
   }, []);
 
+  // Geração de descrição com IA usando AbortController para cancelamento
   const handleGenerateDescription = async () => {
     if (!nome || nome.length < 3) {
       showToast('Digite o nome do produto primeiro (mínimo 3 caracteres)', 'warning');
       return;
     }
+
+    // Cancelar requisição anterior se existir
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Criar novo AbortController
+    abortControllerRef.current = new AbortController();
 
     setAiLoading(true);
     setShowAiPreview(false);
@@ -204,6 +230,7 @@ export default function NovoProdutoPage() {
           nome,
           categoria: categoria || 'produto',
         }),
+        signal: abortControllerRef.current.signal, // Adicionar signal para cancelamento
       });
 
       if (!response.ok) {
@@ -218,7 +245,12 @@ export default function NovoProdutoPage() {
       } else {
         throw new Error('Descrição não recebida');
       }
-    } catch (error) {
+    } catch (error: any) {
+      // Ignorar erro se foi cancelamento intencional
+      if (error.name === 'AbortError') {
+        console.log('Requisição de IA cancelada pelo usuário');
+        return;
+      }
       console.error('Erro ao gerar descrição:', error);
       showToast('Não foi possível gerar a descrição. Tente novamente.', 'error');
     } finally {
@@ -226,13 +258,16 @@ export default function NovoProdutoPage() {
     }
   };
 
-  const handleAcceptAiDescription = useCallback(() => {
+  // Callbacks de AI description com tipagem explícita
+  type AiDescriptionCallback = () => void;
+
+  const handleAcceptAiDescription = useCallback<AiDescriptionCallback>(() => {
     setValue('descricao', aiDescription);
     setShowAiPreview(false);
     setAiDescription('');
   }, [aiDescription, setValue]);
 
-  const handleRejectAiDescription = useCallback(() => {
+  const handleRejectAiDescription = useCallback<AiDescriptionCallback>(() => {
     setShowAiPreview(false);
     setAiDescription('');
   }, []);
