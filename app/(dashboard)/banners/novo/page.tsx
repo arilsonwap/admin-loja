@@ -11,7 +11,7 @@ import Toggle from '@/components/Toggle';
 import Button from '@/components/Button';
 import FileUploader from '@/components/FileUploader';
 import ImagePreview from '@/components/ImagePreview';
-import { createBanner, uploadBannerImagem } from '@/lib/banners';
+import { createBanner, updateBanner, uploadBannerImagem } from '@/lib/banners';
 import { useToast } from '@/components/Toast';
 
 const bannerSchema = z.object({
@@ -77,8 +77,8 @@ export default function NovoBannerPage() {
       // Upload da imagem usando o ID do banner
       const imagemUrl = await uploadBannerImagem(imagemFile, bannerId);
 
-      // Atualizar banner com a URL da imagem
-      await createBanner({
+      // Atualizar o banner com a URL da imagem (não criar outro!)
+      await updateBanner(bannerId, {
         imagem: imagemUrl,
         ordem: data.ordem,
         ativo: data.ativo,
