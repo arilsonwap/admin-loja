@@ -25,6 +25,7 @@ const produtoSchema = z.object({
   categoria: z.string().min(1, 'Selecione uma categoria'),
   descricao: z.string().min(10, 'Descrição deve ter no mínimo 10 caracteres'),
   emPromocao: z.boolean(),
+  isNovo: z.boolean(),
 });
 
 type ProdutoFormData = z.infer<typeof produtoSchema>;
@@ -117,6 +118,7 @@ export default function EditarProdutoPage() {
       setValue('categoria', produto.categoria);
       setValue('descricao', produto.descricao);
       setValue('emPromocao', produto.emPromocao);
+      setValue('isNovo', produto.isNovo || false);
     } catch (error) {
       console.error('Erro ao carregar produto:', error);
       showToast('Erro ao carregar produto', 'error');
@@ -168,11 +170,24 @@ export default function EditarProdutoPage() {
         return;
       }
 
-      // Atualizar produto
-      await updateProduto(id, {
-        ...data,
+      // Preparar dados do produto, removendo campos undefined
+      const produtoData: any = {
+        nome: data.nome,
+        preco: data.preco,
+        categoria: data.categoria,
+        descricao: data.descricao,
+        emPromocao: data.emPromocao,
+        isNovo: data.isNovo,
         imagens: todasImagens,
-      });
+      };
+
+      // Adicionar precoOriginal apenas se tiver valor
+      if (data.precoOriginal !== undefined && data.precoOriginal !== null) {
+        produtoData.precoOriginal = data.precoOriginal;
+      }
+
+      // Atualizar produto
+      await updateProduto(id, produtoData);
 
       setHasUnsavedChanges(false);
       showToast('Produto atualizado com sucesso!', 'success');
@@ -230,16 +245,28 @@ export default function EditarProdutoPage() {
                 {...register('categoria')}
               />
 
-              <div className="border-t pt-4">
-                <Toggle
-                  label="Produto em promoção"
-                  {...register('emPromocao')}
-                />
-                <p className="text-xs text-gray-500 mt-2">
-                  {emPromocao
-                    ? '✅ Ative para criar uma oferta com preço promocional'
-                    : '💡 Ative para mostrar preço original riscado e preço promocional em destaque'}
-                </p>
+              <div className="border-t pt-4 space-y-4">
+                <div>
+                  <Toggle
+                    label="Produto em promoção"
+                    {...register('emPromocao')}
+                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    {emPromocao
+                      ? '✅ Ative para criar uma oferta com preço promocional'
+                      : '💡 Ative para mostrar preço original riscado e preço promocional em destaque'}
+                  </p>
+                </div>
+
+                <div>
+                  <Toggle
+                    label="Produto novo"
+                    {...register('isNovo')}
+                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    🆕 Marque se este é um produto novo no catálogo
+                  </p>
+                </div>
               </div>
 
               {emPromocao ? (

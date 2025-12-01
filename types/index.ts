@@ -7,6 +7,7 @@ export interface Produto {
   descricao: string;
   imagens: string[];
   emPromocao: boolean;
+  isNovo: boolean;
   createdAt: Date;
 }
 

@@ -38,6 +38,7 @@ const produtoSchema = z.object({
   categoria: z.string().min(1, 'Selecione uma categoria'),
   descricao: z.string().min(10, 'Descrição deve ter no mínimo 10 caracteres'),
   emPromocao: z.boolean(),
+  isNovo: z.boolean(),
 });
 
 type ProdutoFormData = z.infer<typeof produtoSchema>;
@@ -66,6 +67,7 @@ export default function NovoProdutoPage() {
     resolver: zodResolver(produtoSchema),
     defaultValues: {
       emPromocao: false,
+      isNovo: false,
     },
   });
 
@@ -375,16 +377,28 @@ export default function NovoProdutoPage() {
                 {...register('categoria')}
               />
 
-              <div className="border-t pt-4">
-                <Toggle
-                  label="Produto em promoção"
-                  {...register('emPromocao')}
-                />
-                <p className="text-xs text-gray-500 mt-2">
-                  {emPromocao
-                    ? '✅ Ative para criar uma oferta com preço promocional'
-                    : '💡 Ative para mostrar preço original riscado e preço promocional em destaque'}
-                </p>
+              <div className="border-t pt-4 space-y-4">
+                <div>
+                  <Toggle
+                    label="Produto em promoção"
+                    {...register('emPromocao')}
+                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    {emPromocao
+                      ? '✅ Ative para criar uma oferta com preço promocional'
+                      : '💡 Ative para mostrar preço original riscado e preço promocional em destaque'}
+                  </p>
+                </div>
+
+                <div>
+                  <Toggle
+                    label="Produto novo"
+                    {...register('isNovo')}
+                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    🆕 Marque se este é um produto novo no catálogo
+                  </p>
+                </div>
               </div>
 
               {emPromocao ? (
