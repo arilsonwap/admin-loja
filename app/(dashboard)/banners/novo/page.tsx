@@ -1,21 +1,34 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+
 import Header from '@/components/Header';
 import Input from '@/components/Input';
 import Toggle from '@/components/Toggle';
 import Button from '@/components/Button';
 import FileUploader from '@/components/FileUploader';
 import ImagePreview from '@/components/ImagePreview';
-import { createBanner, updateBanner, uploadBannerImagem } from '@/lib/banners';
+
+import {
+  createBanner,
+  updateBanner,
+  uploadBannerImagem,
+  deleteBanner,
+} from '@/lib/banners';
+
 import { useToast } from '@/components/Toast';
 
+// Schema com validações mais completas
 const bannerSchema = z.object({
-  ordem: z.number().min(0, 'Ordem deve ser um número positivo'),
+  ordem: z
+    .number({ invalid_type_error: 'Digite um número válido' })
+    .int('A ordem deve ser um número inteiro')
+    .min(0, 'Ordem mínima é 0')
+    .max(999, 'Valor máximo é 999'),
   ativo: z.boolean(),
 });
 
@@ -24,6 +37,7 @@ type BannerFormData = z.infer<typeof bannerSchema>;
 export default function NovoBannerPage() {
   const router = useRouter();
   const { showToast } = useToast();
+
   const [loading, setLoading] = useState(false);
   const [imagemFile, setImagemFile] = useState<File | null>(null);
   const [imagemPreview, setImagemPreview] = useState<string>('');
@@ -34,69 +48,78 @@ export default function NovoBannerPage() {
     formState: { errors },
   } = useForm<BannerFormData>({
     resolver: zodResolver(bannerSchema),
-    defaultValues: {
-      ordem: 0,
-      ativo: true,
-    },
+    defaultValues: { ordem: 0, ativo: true },
   });
 
-  const handleFileSelected = (files: File[]) => {
-    if (files.length === 0) return;
+  const handleFileSelected = useCallback((files: File[]) => {
+    if (!files.length) return;
 
     const file = files[0];
     setImagemFile(file);
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setImagemPreview(reader.result as string);
-    };
-    reader.readAsDataURL(file);
-  };
+    // Preview instantâneo
+    const url = URL.createObjectURL(file);
+    setImagemPreview(url);
+  }, []);
 
-  const handleRemoveImage = () => {
+  const handleRemoveImage = useCallback(() => {
+    if (imagemPreview) URL.revokeObjectURL(imagemPreview);
+
     setImagemFile(null);
     setImagemPreview('');
-  };
+  }, [imagemPreview]);
 
-  const onSubmit = async (data: BannerFormData) => {
-    if (!imagemFile) {
-      showToast('Selecione uma imagem para o banner', 'warning');
-      return;
-    }
+  const onSubmit = useCallback(
+    async (data: BannerFormData) => {
+      if (!imagemFile) {
+        showToast('Selecione uma imagem para o banner', 'warning');
+        return;
+      }
 
-    setLoading(true);
+      setLoading(true);
 
-    try {
-      // Criar banner primeiro para obter o ID
-      const bannerId = await createBanner({
-        imagem: '',
-        ordem: data.ordem,
-        ativo: data.ativo,
-      });
+      let bannerId = '';
 
-      // Upload da imagem usando o ID do banner
-      const imagemUrl = await uploadBannerImagem(imagemFile, bannerId);
+      try {
+        // 1. Cria um documento temporário para gerar ID
+        bannerId = await createBanner({
+          imagem: '',
+          ordem: data.ordem,
+          ativo: data.ativo,
+        });
 
-      // Atualizar o banner com a URL da imagem (não criar outro!)
-      await updateBanner(bannerId, {
-        imagem: imagemUrl,
-        ordem: data.ordem,
-        ativo: data.ativo,
-      });
+        // 2. Upload da imagem
+        const imagemUrl = await uploadBannerImagem(imagemFile, bannerId);
 
-      showToast('Banner criado com sucesso!', 'success');
-      router.push('/banners');
-    } catch (error) {
-      console.error('Erro ao criar banner:', error);
-      showToast('Erro ao criar banner', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
+        // 3. Atualiza o documento com a imagem
+        await updateBanner(bannerId, {
+          imagem: imagemUrl,
+          ordem: data.ordem,
+          ativo: data.ativo,
+        });
+
+        showToast('Banner criado com sucesso!', 'success');
+        router.push('/banners');
+      } catch (error) {
+        console.error('Erro ao criar banner:', error);
+
+        // rollback → remove banner criado antes do erro
+        if (bannerId) {
+          await deleteBanner(bannerId);
+        }
+
+        showToast('Erro ao criar banner', 'error');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [imagemFile, imagemPreview, showToast, router]
+  );
 
   return (
     <>
       <Header title="Novo Banner" />
+
       <div className="pt-16 p-8">
         <div className="max-w-2xl">
           <h1 className="text-2xl font-bold text-gray-800 mb-6">
@@ -104,6 +127,8 @@ export default function NovoBannerPage() {
           </h1>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            
+            {/* Section: Upload */}
             <div className="bg-white rounded-lg shadow p-6 space-y-4">
               <h2 className="text-lg font-semibold text-gray-800">
                 Imagem do Banner
@@ -114,6 +139,7 @@ export default function NovoBannerPage() {
                 accept="image/*"
                 multiple={false}
                 onFilesSelected={handleFileSelected}
+                disabled={loading}
               />
 
               {imagemPreview && (
@@ -124,10 +150,11 @@ export default function NovoBannerPage() {
               )}
 
               <p className="text-sm text-gray-600">
-                Recomendado: Imagem em formato landscape (1920x600px ou similar)
+                Recomendado: 1920x600px (formato landscape)
               </p>
             </div>
 
+            {/* Section: Configs */}
             <div className="bg-white rounded-lg shadow p-6 space-y-4">
               <h2 className="text-lg font-semibold text-gray-800">
                 Configurações
@@ -139,17 +166,18 @@ export default function NovoBannerPage() {
                 placeholder="0"
                 error={errors.ordem?.message}
                 required
+                disabled={loading}
                 {...register('ordem', { valueAsNumber: true })}
               />
 
               <Toggle
                 label="Banner ativo"
+                disabled={loading}
                 {...register('ativo')}
               />
 
               <p className="text-sm text-gray-600">
-                A ordem define a posição de exibição do banner. Banners com
-                menor ordem aparecem primeiro.
+                Banners com menor ordem aparecem primeiro.
               </p>
             </div>
 
@@ -157,10 +185,12 @@ export default function NovoBannerPage() {
               <Button type="submit" loading={loading}>
                 Salvar Banner
               </Button>
+
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => router.push('/banners')}
+                onClick={() => router.back()}
+                disabled={loading}
               >
                 Cancelar
               </Button>

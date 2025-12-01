@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Table from '@/components/Table';
@@ -14,12 +14,10 @@ export default function BannersPage() {
   const router = useRouter();
   const [banners, setBanners] = useState<Banner[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadBanners();
-  }, []);
-
-  const loadBanners = async () => {
+  const loadBanners = useCallback(async () => {
+    setLoading(true);
     try {
       const data = await getBanners();
       setBanners(data);
@@ -28,74 +26,93 @@ export default function BannersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Tem certeza que deseja deletar este banner?')) return;
+  useEffect(() => {
+    loadBanners();
+  }, [loadBanners]);
 
-    try {
-      await deleteBanner(id);
-      await loadBanners();
-    } catch (error) {
-      console.error('Erro ao deletar banner:', error);
-      alert('Erro ao deletar banner');
-    }
-  };
+  const handleDelete = useCallback(
+    async (id: string) => {
+      if (!confirm('Tem certeza que deseja deletar este banner?')) return;
 
-  const columns = [
-    {
-      key: 'imagem',
-      label: 'Preview',
-      render: (banner: Banner) => (
-        <div className="relative w-32 h-16">
-          <Image
-            src={banner.imagem}
-            alt="Banner"
-            fill
-            className="object-cover rounded"
-          />
-        </div>
-      ),
+      try {
+        setDeleting(id);
+        await deleteBanner(id);
+        await loadBanners();
+      } catch (error) {
+        console.error('Erro ao deletar banner:', error);
+        alert('Erro ao deletar banner');
+      } finally {
+        setDeleting(null);
+      }
     },
-    { key: 'ordem', label: 'Ordem' },
-    {
-      key: 'ativo',
-      label: 'Status',
-      render: (banner: Banner) => (
-        <span
-          className={`px-2 py-1 rounded text-xs font-medium ${
-            banner.ativo
-              ? 'bg-green-100 text-green-800'
-              : 'bg-red-100 text-red-800'
-          }`}
-        >
-          {banner.ativo ? 'Ativo' : 'Inativo'}
-        </span>
-      ),
-    },
-    {
-      key: 'acoes',
-      label: 'Ações',
-      render: (banner: Banner) => (
-        <div className="flex gap-2">
-          <button
-            onClick={() => router.push(`/banners/${banner.id}`)}
-            className="p-2 text-blue-600 hover:bg-blue-50 rounded"
-            title="Editar"
+    [loadBanners]
+  );
+
+  const columns = useMemo(
+    () => [
+      {
+        key: 'imagem',
+        label: 'Preview',
+        render: (banner: Banner) => (
+          <div className="relative w-32 h-16">
+            <Image
+              src={banner.imagem}
+              alt="Banner"
+              fill
+              className="object-cover rounded"
+            />
+          </div>
+        ),
+      },
+      { key: 'ordem', label: 'Ordem' },
+      {
+        key: 'ativo',
+        label: 'Status',
+        render: (banner: Banner) => (
+          <span
+            className={`px-2 py-1 rounded text-xs font-medium ${
+              banner.ativo
+                ? 'bg-green-100 text-green-800'
+                : 'bg-red-100 text-red-800'
+            }`}
           >
-            <IoCreate size={20} />
-          </button>
-          <button
-            onClick={() => handleDelete(banner.id!)}
-            className="p-2 text-red-600 hover:bg-red-50 rounded"
-            title="Deletar"
-          >
-            <IoTrash size={20} />
-          </button>
-        </div>
-      ),
-    },
-  ];
+            {banner.ativo ? 'Ativo' : 'Inativo'}
+          </span>
+        ),
+      },
+      {
+        key: 'acoes',
+        label: 'Ações',
+        render: (banner: Banner) => (
+          <div className="flex gap-2">
+            <button
+              onClick={() => router.push(`/banners/${banner.id}`)}
+              className="p-2 text-blue-600 hover:bg-blue-50 rounded"
+              title="Editar"
+            >
+              <IoCreate size={20} />
+            </button>
+
+            <button
+              onClick={() => handleDelete(banner.id!)}
+              className="p-2 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
+              disabled={deleting === banner.id}
+              title="Deletar"
+            >
+              {deleting === banner.id ? (
+                <div className="h-5 w-5 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <IoTrash size={20} />
+              )}
+            </button>
+          </div>
+        ),
+      },
+    ],
+    [router, handleDelete, deleting]
+  );
 
   return (
     <>
@@ -103,9 +120,7 @@ export default function BannersPage() {
       <div className="pt-16 p-8">
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">
-              Gerenciar Banners
-            </h1>
+            <h1 className="text-2xl font-bold text-gray-800">Gerenciar Banners</h1>
             <p className="text-gray-600">
               {banners.length} banner(s) cadastrado(s)
             </p>
@@ -122,12 +137,10 @@ export default function BannersPage() {
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
+        ) : banners.length === 0 ? (
+          <p className="text-gray-500 text-center py-24">Nenhum banner cadastrado.</p>
         ) : (
-          <Table
-            columns={columns}
-            data={banners}
-            keyExtractor={(banner) => banner.id!}
-          />
+          <Table columns={columns} data={banners} keyExtractor={(b) => b.id!} />
         )}
       </div>
     </>

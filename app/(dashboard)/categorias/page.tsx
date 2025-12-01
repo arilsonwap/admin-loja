@@ -1,110 +1,87 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import * as Icons from 'react-icons/io5';
+
 import Header from '@/components/Header';
 import Table from '@/components/Table';
-import Button from '@/components/Button';
-import { getCategorias, deleteCategoria } from '@/lib/categorias';
+import PageHeader from '@/components/PageHeader';
+import ConfirmModal from '@/components/ConfirmModal';
+
+import { useCategorias } from '@/hooks/useCategorias';
 import { Categoria } from '@/types';
-import { IoAdd, IoTrash, IoCreate } from 'react-icons/io5';
-import * as Icons from 'react-icons/io5';
+import { IoAdd, IoCreate, IoTrash } from 'react-icons/io5';
 
 export default function CategoriasPage() {
   const router = useRouter();
-  const [categorias, setCategorias] = useState<Categoria[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { categorias, loading, removerCategoria } = useCategorias();
 
-  useEffect(() => {
-    loadCategorias();
-  }, []);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const loadCategorias = async () => {
-    try {
-      const data = await getCategorias();
-      setCategorias(data);
-    } catch (error) {
-      console.error('Erro ao carregar categorias:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const ICON_MAP = useMemo(() => Icons, []);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Tem certeza que deseja deletar esta categoria?')) return;
-
-    try {
-      await deleteCategoria(id);
-      await loadCategorias();
-    } catch (error) {
-      console.error('Erro ao deletar categoria:', error);
-      alert('Erro ao deletar categoria');
-    }
-  };
-
-  const columns = [
-    {
-      key: 'icone',
-      label: 'Ícone',
-      render: (categoria: Categoria) => {
-        const IconComponent = (Icons as any)[categoria.icone];
-        return IconComponent ? (
-          <IconComponent size={24} className="text-blue-600" />
-        ) : (
-          <span className="text-gray-400">-</span>
-        );
+  const columns = useMemo(
+    () => [
+      {
+        key: 'icone',
+        label: 'Ícone',
+        render: (categoria: Categoria) => {
+          const IconComponent = ICON_MAP[categoria.icone as keyof typeof Icons];
+          return IconComponent ? (
+            <IconComponent size={24} className="text-blue-600" />
+          ) : (
+            <span className="text-gray-300">—</span>
+          );
+        },
       },
-    },
-    { key: 'nome', label: 'Nome' },
-    { key: 'ordem', label: 'Ordem' },
-    {
-      key: 'acoes',
-      label: 'Ações',
-      render: (categoria: Categoria) => (
-        <div className="flex gap-2">
-          <button
-            onClick={() => router.push(`/categorias/${categoria.id}`)}
-            className="p-2 text-blue-600 hover:bg-blue-50 rounded"
-            title="Editar"
-          >
-            <IoCreate size={20} />
-          </button>
-          <button
-            onClick={() => handleDelete(categoria.id!)}
-            className="p-2 text-red-600 hover:bg-red-50 rounded"
-            title="Deletar"
-          >
-            <IoTrash size={20} />
-          </button>
-        </div>
-      ),
-    },
-  ];
+      { key: 'nome', label: 'Nome' },
+      { key: 'ordem', label: 'Ordem' },
+      {
+        key: 'acoes',
+        label: 'Ações',
+        render: (categoria: Categoria) => (
+          <div className="flex gap-2">
+            <button
+              onClick={() => router.push(`/categorias/${categoria.id}`)}
+              className="p-2 text-blue-600 hover:bg-blue-50 rounded"
+              title="Editar"
+            >
+              <IoCreate size={20} />
+            </button>
+
+            <button
+              onClick={() => setDeleteId(categoria.id!)}
+              className="p-2 text-red-600 hover:bg-red-50 rounded"
+              title="Deletar"
+            >
+              <IoTrash size={20} />
+            </button>
+          </div>
+        ),
+      },
+    ],
+    [router, ICON_MAP]
+  );
 
   return (
     <>
       <Header title="Categorias" />
+
       <div className="pt-16 p-8">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">
-              Gerenciar Categorias
-            </h1>
-            <p className="text-gray-600">
-              {categorias.length} categoria(s) cadastrada(s)
-            </p>
-          </div>
-          <Button onClick={() => router.push('/categorias/novo')}>
-            <span className="flex items-center gap-2">
-              <IoAdd size={20} />
-              Nova Categoria
-            </span>
-          </Button>
-        </div>
+        <PageHeader
+          title="Gerenciar Categorias"
+          count={categorias.length}
+          buttonLabel="Nova Categoria"
+          buttonIcon={IoAdd}
+          onButtonClick={() => router.push('/categorias/novo')}
+        />
 
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <div className="space-y-3 animate-pulse">
+            <div className="h-10 bg-gray-200 rounded" />
+            <div className="h-10 bg-gray-200 rounded" />
+            <div className="h-10 bg-gray-200 rounded" />
           </div>
         ) : (
           <Table
@@ -114,6 +91,17 @@ export default function CategoriasPage() {
           />
         )}
       </div>
+
+      {/* Modal de confirmação */}
+      <ConfirmModal
+        open={!!deleteId}
+        message="Tem certeza que deseja deletar esta categoria?"
+        onCancel={() => setDeleteId(null)}
+        onConfirm={() => {
+          removerCategoria(deleteId!);
+          setDeleteId(null);
+        }}
+      />
     </>
   );
 }
